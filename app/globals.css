@@ -1,0 +1,576 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --seekho-cream: #fefae0;
+  --seekho-green: #283618;
+  --seekho-olive: #606c38;
+  --seekho-ink: #0d1321;
+  --seekho-brown: #43291f;
+  --seekho-emerald: #16a34a;
+  --seekho-emerald-deep: #15803d;
+  --seekho-leaf: #84cc16;
+  --seekho-mint: #bbf7d0;
+  --seekho-amber: #f59e0b;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-cream text-ink;
+  background-image:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.78), transparent 32%),
+    linear-gradient(180deg, #fdfff5 0%, #f5f9e3 48%, #eaf4d2 100%);
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(22, 163, 74, 0.22);
+  color: var(--seekho-ink);
+}
+
+/* ── Background shell ─────────────────────────────────────────────────── */
+.seekho-site-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.seekho-site-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(22, 163, 74, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(132, 204, 22, 0.18), transparent 26%),
+    radial-gradient(circle at 80% 80%, rgba(34, 197, 94, 0.14), transparent 22%);
+}
+
+/*
+ * Notebook-style grid surface.
+ * To swap to your downloaded Vecteezy doodle image:
+ *  1) Save the image to seekho-next/public/backgrounds/doodle.png
+ *  2) Replace the background-image below with:
+ *     background-image: url('/backgrounds/doodle.png');
+ *     background-size: 520px auto;
+ *     background-repeat: repeat;
+ *  3) Keep the mask-image rule so the pattern fades nicely.
+ */
+.seekho-site-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(40, 54, 24, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 54, 24, 0.05) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, black 58%, transparent 100%);
+}
+
+/* ── Top-docked glass nav ────────────────────────────────────────────── */
+.seekho-glass-nav {
+  position: relative;
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(253, 255, 240, 0.88);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-radius: 0 0 1.6rem 1.6rem;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 18px 40px -30px rgba(20, 83, 45, 0.45);
+}
+
+.seekho-glass-nav-docked {
+  margin: 0;
+}
+
+/* Logo wrapper: anchored INSIDE the nav, but oversized so it breaks the border. */
+.seekho-logo-overlap {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin-top: -18px;
+  margin-bottom: -18px;
+  transition:
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.35s ease;
+  filter: drop-shadow(0 16px 24px rgba(20, 83, 45, 0.25)) drop-shadow(0 6px 10px rgba(20, 83, 45, 0.15));
+}
+
+.seekho-logo-in-nav {
+  align-self: center;
+}
+
+.seekho-logo-overlap img {
+  display: block;
+  background: transparent;
+  height: 108px;
+  width: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 640px) {
+  .seekho-logo-overlap img {
+    height: 132px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .seekho-logo-overlap img {
+    height: 152px;
+  }
+}
+
+.seekho-logo-overlap::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+      rgba(132, 204, 22, 0.32) 0%,
+      rgba(22, 163, 74, 0.18) 38%,
+      transparent 70%);
+  filter: blur(20px);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  z-index: -1;
+}
+
+.seekho-logo-overlap:hover {
+  transform: translateY(-2px) rotate(-2deg) scale(1.04);
+}
+
+.seekho-logo-overlap:hover::before {
+  opacity: 1;
+}
+
+@keyframes seekho-logo-pulse {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.seekho-logo-overlap {
+  animation: seekho-logo-pulse 6s ease-in-out infinite;
+}
+
+/* Nav links */
+.seekho-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 9999px;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(13, 19, 33, 0.74);
+  transition:
+    transform 0.18s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.seekho-nav-link:hover {
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(13, 19, 33, 0.98);
+  transform: translateY(-1px);
+}
+
+.seekho-nav-link-active {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.18), rgba(132, 204, 22, 0.16));
+  color: rgba(20, 83, 45, 1);
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.3);
+}
+
+/* ── Hero surface ────────────────────────────────────────────────────── */
+.seekho-hero-pattern {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(253, 255, 240, 0.66)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 30%),
+    repeating-linear-gradient(0deg, rgba(40, 54, 24, 0.05), rgba(40, 54, 24, 0.05) 1px, transparent 1px, transparent 36px),
+    repeating-linear-gradient(90deg, rgba(40, 54, 24, 0.04), rgba(40, 54, 24, 0.04) 1px, transparent 1px, transparent 36px),
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 24%),
+    linear-gradient(135deg, rgba(253, 255, 240, 0.96) 0%, rgba(229, 244, 188, 0.86) 55%, rgba(220, 252, 231, 0.88) 100%);
+}
+
+.seekho-grid-overlay {
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(22, 163, 74, 0.1), transparent 12%),
+    radial-gradient(circle at 78% 18%, rgba(132, 204, 22, 0.1), transparent 12%),
+    radial-gradient(circle at 72% 76%, rgba(245, 158, 11, 0.07), transparent 11%);
+}
+
+/* ── Pills, chips, badges ────────────────────────────────────────────── */
+.seekho-badge {
+  border-radius: 9999px;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.6rem 1rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(20, 83, 45, 0.85);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 34px -26px rgba(20, 83, 45, 0.5);
+}
+
+.seekho-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.55rem 0.95rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(20, 83, 45, 0.82);
+}
+
+.seekho-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  color: rgba(13, 19, 33, 0.74);
+  box-shadow: 0 12px 24px -22px rgba(20, 83, 45, 0.45);
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────── */
+.seekho-input {
+  @apply h-11 w-full rounded-xl border border-emerald-700/15 bg-white/80 px-3 text-sm text-ink shadow-sm outline-none transition;
+  backdrop-filter: blur(8px);
+}
+
+.seekho-input:focus {
+  border-color: rgba(22, 163, 74, 0.5);
+  box-shadow:
+    0 0 0 4px rgba(22, 163, 74, 0.14),
+    0 10px 26px -18px rgba(22, 163, 74, 0.5);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.seekho-card {
+  position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(247, 252, 232, 0.72) 100%);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 22px 52px -32px rgba(20, 83, 45, 0.38),
+    0 10px 22px -16px rgba(20, 83, 45, 0.18);
+  transition:
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.seekho-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(22, 163, 74, 0.32);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 28px 62px -32px rgba(20, 83, 45, 0.42),
+    0 16px 28px -18px rgba(22, 163, 74, 0.22);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.seekho-btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  padding: 0.72rem 1.3rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #f8fef0;
+  background: linear-gradient(135deg, #15803d 0%, #16a34a 55%, #84cc16 110%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 12px 28px -14px rgba(22, 101, 52, 0.65),
+    0 6px 12px rgba(0, 0, 0, 0.14);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease;
+}
+
+.seekho-btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 28%, rgba(255, 255, 255, 0.35) 50%, transparent 72%);
+  transform: translateX(-120%);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.seekho-btn-primary:hover::before {
+  transform: translateX(120%);
+}
+
+.seekho-btn-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.42) inset,
+    0 16px 34px -14px rgba(22, 101, 52, 0.78),
+    0 8px 15px rgba(0, 0, 0, 0.18);
+}
+
+.seekho-btn-primary:active {
+  transform: translateY(1px);
+}
+
+.seekho-btn-primary:disabled {
+  filter: grayscale(0.4) brightness(0.86);
+  cursor: not-allowed;
+}
+
+.seekho-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.7rem 1.18rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: rgba(20, 83, 45, 0.92);
+  backdrop-filter: blur(10px);
+  transition:
+    transform 0.18s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.seekho-btn-secondary:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(22, 163, 74, 0.42);
+  box-shadow: 0 12px 24px -20px rgba(22, 163, 74, 0.5);
+}
+
+.seekho-btn-xl {
+  min-width: 11rem;
+  padding-left: 1.4rem;
+  padding-right: 1.4rem;
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+
+.seekho-pill {
+  @apply rounded-full px-4 py-2 text-sm font-semibold transition;
+}
+
+.seekho-pill-active {
+  background: linear-gradient(135deg, #15803d, #16a34a);
+  color: #f8fef0;
+  box-shadow: 0 10px 22px -14px rgba(22, 101, 52, 0.6);
+}
+
+.seekho-pill-idle {
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(13, 19, 33, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.18);
+}
+
+.seekho-pill-idle:hover {
+  background: rgba(220, 252, 231, 0.85);
+}
+
+/* ── Day card (planner) ──────────────────────────────────────────────── */
+.seekho-day-card {
+  position: relative;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(22, 163, 74, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(220, 252, 231, 0.62) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 24px 52px -34px rgba(20, 83, 45, 0.42);
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.seekho-day-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.98) inset,
+    0 30px 64px -32px rgba(20, 83, 45, 0.5);
+}
+
+.seekho-day-card::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #15803d, #16a34a, #84cc16);
+}
+
+/* ── Prose (Markdown) ─────────────────────────────────────────────────── */
+.prose {
+  @apply text-ink;
+}
+
+.prose table {
+  @apply w-full border-collapse overflow-hidden rounded-lg border border-emerald-900/20;
+}
+
+.prose thead {
+  background: rgba(132, 204, 22, 0.15);
+}
+
+.prose th,
+.prose td {
+  @apply border border-emerald-900/15 px-3 py-2 align-top text-sm;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  @apply font-semibold text-ink;
+}
+
+.prose a {
+  @apply text-emerald-800 underline decoration-emerald-600/40 underline-offset-2;
+}
+
+.prose strong {
+  @apply font-semibold text-ink;
+}
+
+.prose code {
+  background: rgba(22, 163, 74, 0.1);
+  @apply rounded px-1 py-0.5 text-emerald-900;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-emerald-600 bg-emerald-50/60 px-4 py-2 italic text-ink/80;
+}
+
+.katex {
+  font-size: 1.02em;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────── */
+@keyframes seekho-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background-image: linear-gradient(90deg,
+      rgba(22, 163, 74, 0.06) 0%,
+      rgba(132, 204, 22, 0.2) 50%,
+      rgba(22, 163, 74, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: seekho-shimmer 1.6s linear infinite;
+}
+
+@keyframes seekho-float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes seekho-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.seekho-fade-up {
+  animation: seekho-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .seekho-btn-primary::before,
+  .animate-shimmer,
+  .seekho-fade-up,
+  .seekho-logo-overlap {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .seekho-card:hover,
+  .seekho-btn-primary:hover,
+  .seekho-btn-secondary:hover,
+  .seekho-nav-link:hover,
+  .seekho-logo-overlap:hover,
+  .seekho-day-card:hover {
+    transform: none !important;
+  }
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .seekho-card,
+  .seekho-day-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
