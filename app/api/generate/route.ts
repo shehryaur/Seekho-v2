@@ -4,8 +4,7 @@
  * POST -> Generate a full classroom lesson pack as strict JSON.
  *
  * v3 fix: Uses Gemini's schema-constrained decoding (`responseSchema`).
- *         Eliminates the entire class of "JSON parsing failed" errors that
- *         used to crash the Quiz tab.
+ * Added strict diagnostic logging and error handling for JSON truncation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -126,9 +125,64 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const response = await model.generateContent(prompt);
-    const lesson = parseLessonJson(response.response.text());
+    // 1. Generate the content
+    const result = await model.generateContent(prompt);
+    const response = result.response;
 
+    // 2. Extract metadata and log it
+    const finishReason = response.candidates?.[0]?.finishReason;
+    console.log("--- GEMINI FINISH REASON ---", finishReason);
+
+    let rawText = "";
+    try {
+      rawText = response.text();
+      console.log("--- GEMINI RAW TEXT LENGTH ---", rawText.length);
+    } catch (textError) {
+      console.error("Failed to extract text from response", textError);
+    }
+
+    // 3. Handle specific failure scenarios before parsing
+    if (finishReason === "MAX_TOKENS") {
+      console.error("TRUNCATION ERROR: Output hit the token limit.");
+      return NextResponse.json(
+        {
+          error: "The lesson plan is too large. The AI hit the maximum token limit and truncated the JSON.",
+          finishReason,
+          textSnippet: rawText.substring(rawText.length - 200)
+        },
+        { status: 413 }
+      );
+    }
+
+    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
+      console.error("SAFETY ERROR: Generation blocked.");
+      return NextResponse.json(
+        {
+          error: "The AI blocked the generation due to safety or recitation filters.",
+          finishReason
+        },
+        { status: 403 }
+      );
+    }
+
+    // 4. Attempt to parse the JSON
+    let lesson;
+    try {
+      lesson = parseLessonJson(rawText);
+    } catch (parseError) {
+      console.error("JSON Parsing Failed. Dumping last 500 characters of raw text:");
+      console.error(rawText.substring(rawText.length - 500));
+      return NextResponse.json(
+        {
+          error: "The AI returned malformed or incomplete JSON.",
+          finishReason,
+          parseError: String(parseError)
+        },
+        { status: 500 }
+      );
+    }
+
+    // 5. Proceed with saving and logging
     const saved = await saveLesson({
       school_name: body.school,
       district: body.district,
@@ -165,7 +219,7 @@ export async function POST(req: NextRequest) {
       verifiedContextCount: verifiedContext.length,
     });
   } catch (error) {
-    console.error("[generate] failed", error);
+    console.error("[generate] failed to execute request pipeline", error);
     return NextResponse.json(
       {
         error: "Seekho Engine could not generate this lesson right now.",
