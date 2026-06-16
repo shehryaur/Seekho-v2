@@ -151,7 +151,7 @@ Rules:
   try {
     const model = ai().getGenerativeModel({
       model: "gemini-flash-latest",
-      generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
+      generationConfig: { temperature: 0.6, maxOutputTokens: 4000 },
     });
     const response = await model.generateContent(prompt);
     return NextResponse.json({

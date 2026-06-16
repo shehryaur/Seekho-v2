@@ -3,19 +3,23 @@
  *
  * POST -> Generate a full classroom lesson pack as strict JSON.
  *
- * v3 fix: Uses Gemini's schema-constrained decoding (`responseSchema`).
- * Added strict diagnostic logging and error handling for JSON truncation.
+ * v4 update (Partitioned Pipeline):
+ *   The single 8-output-field schema-constrained call has been replaced
+ *   with a 4-call pipeline: 1 small seed call + 3 parallel silo calls.
+ *   See lib/lessonPipeline.ts for the full rationale.
+ *
+ * The returned response shape is unchanged so the LessonGenerator UI
+ * and `parseLessonJson` consumers downstream continue to work exactly
+ * as before.
+ *
+ * Variable names, model name, environment variables, and external
+ * helpers (`getDistrict`, `getTopVerifiedSnippets`, `saveLesson`,
+ * `logAnalytics`, `buildPrompt`, `parseLessonJson`) are all preserved.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
-import {
-  buildPrompt,
-  parseLessonJson,
-  type Language,
-  type Profile,
-} from "@/lib/buildPrompt";
+import { type Language, type Profile } from "@/lib/buildPrompt";
 import {
   getDistrict,
   getTopVerifiedSnippets,
@@ -23,11 +27,13 @@ import {
   saveLesson,
   type MultiGradeMix,
 } from "@/lib/supabase";
-import { LESSON_SCHEMA } from "@/lib/lessonSchema";
+import { generateLessonPipeline } from "@/lib/lessonPipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Slightly longer than 60s — the seed + 3 parallel silos finish well
+// under this in practice but we leave headroom for slow networks.
+export const maxDuration = 90;
 
 const Body = z.object({
   school: z.string().min(1),
@@ -61,17 +67,6 @@ const Body = z.object({
     .optional() as z.ZodType<MultiGradeMix | undefined>,
 });
 
-let client: GoogleGenerativeAI | null = null;
-function ai() {
-  if (client) return client;
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY is missing.");
-  client = new GoogleGenerativeAI(key);
-  return client;
-}
-
-const MODEL_NAME = "gemini-flash-latest";
-
 export async function POST(req: NextRequest) {
   let body: z.infer<typeof Body>;
   try {
@@ -97,7 +92,8 @@ export async function POST(req: NextRequest) {
       limit: 6,
     }).catch(() => [] as string[]);
 
-    const prompt = buildPrompt({
+    const t0 = Date.now();
+    const { lesson, health } = await generateLessonPipeline({
       school: body.school,
       district,
       classNum: body.classNum,
@@ -114,75 +110,12 @@ export async function POST(req: NextRequest) {
       multiGrade: body.multiGrade,
       verifiedContext,
     });
+    const tElapsed = Date.now() - t0;
+    console.log(
+      "[generate] pipeline ok",
+      JSON.stringify({ ...health, ms: tElapsed }),
+    );
 
-    const model = ai().getGenerativeModel({
-      model: MODEL_NAME,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: LESSON_SCHEMA as unknown as object,
-        temperature: 0.65,
-        maxOutputTokens: 8192,
-      },
-    });
-
-    // 1. Generate the content
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-
-    // 2. Extract metadata and log it
-    const finishReason = response.candidates?.[0]?.finishReason;
-    console.log("--- GEMINI FINISH REASON ---", finishReason);
-
-    let rawText = "";
-    try {
-      rawText = response.text();
-      console.log("--- GEMINI RAW TEXT LENGTH ---", rawText.length);
-    } catch (textError) {
-      console.error("Failed to extract text from response", textError);
-    }
-
-    // 3. Handle specific failure scenarios before parsing
-    if (finishReason === "MAX_TOKENS") {
-      console.error("TRUNCATION ERROR: Output hit the token limit.");
-      return NextResponse.json(
-        {
-          error: "The lesson plan is too large. The AI hit the maximum token limit and truncated the JSON.",
-          finishReason,
-          textSnippet: rawText.substring(rawText.length - 200)
-        },
-        { status: 413 }
-      );
-    }
-
-    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
-      console.error("SAFETY ERROR: Generation blocked.");
-      return NextResponse.json(
-        {
-          error: "The AI blocked the generation due to safety or recitation filters.",
-          finishReason
-        },
-        { status: 403 }
-      );
-    }
-
-    // 4. Attempt to parse the JSON
-    let lesson;
-    try {
-      lesson = parseLessonJson(rawText);
-    } catch (parseError) {
-      console.error("JSON Parsing Failed. Dumping last 500 characters of raw text:");
-      console.error(rawText.substring(rawText.length - 500));
-      return NextResponse.json(
-        {
-          error: "The AI returned malformed or incomplete JSON.",
-          finishReason,
-          parseError: String(parseError)
-        },
-        { status: 500 }
-      );
-    }
-
-    // 5. Proceed with saving and logging
     const saved = await saveLesson({
       school_name: body.school,
       district: body.district,
@@ -210,6 +143,10 @@ export async function POST(req: NextRequest) {
       language: body.language,
       output_mode: "Full Lesson Pack",
       verified_context_count: verifiedContext.length,
+      pipeline_ms: tElapsed,
+      pipeline_guide_ok: health.guide_ok,
+      pipeline_student_activity_ok: health.student_activity_ok,
+      pipeline_assessment_ok: health.assessment_ok,
     });
 
     return NextResponse.json({
@@ -217,9 +154,10 @@ export async function POST(req: NextRequest) {
       shareToken: saved?.share_token ?? null,
       fallback: lesson._fallback === true,
       verifiedContextCount: verifiedContext.length,
+      health,
     });
   } catch (error) {
-    console.error("[generate] failed to execute request pipeline", error);
+    console.error("[generate] pipeline failed", error);
     return NextResponse.json(
       {
         error: "Seekho Engine could not generate this lesson right now.",
