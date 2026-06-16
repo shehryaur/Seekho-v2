@@ -130,7 +130,7 @@ RULES
 - Use plain text only. No markdown headings, no asterisks. Output ONLY the JSON described in the schema.`;
 
     const model = ai().getGenerativeModel({
-        model: "gemini-3.1-flash-lite",
+        model: "gemini-flash-latest",
         generationConfig: {
             responseMimeType: "application/json",
             responseSchema: SCHEMA as unknown as object,
