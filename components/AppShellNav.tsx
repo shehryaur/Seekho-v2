@@ -108,9 +108,7 @@ export function AppShellNav() {
             </nav>
 
             <div className="flex items-center gap-2 sm:justify-end">
-              <Link href="/how-to-use" className="seekho-btn-secondary">
-                See how it works
-              </Link>
+              
               <Link href="/#lesson-generator" className="seekho-btn-primary">
                 <Sparkles className="h-4 w-4" />
                 Generate now
