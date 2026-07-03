@@ -7,6 +7,30 @@ Built on Next.js 16 (App Router), TypeScript, Tailwind CSS, Supabase
 
 ---
 
+# Executive Summary
+Seekho Engine is a hyper-local AI curriculum platform. It generates localized lesson plans for Pakistani teachers. The platform aligns with the Punjab Curriculum and Textbook Board (PCTB) syllabus. It serves resource-constrained environments by accounting for multi-grade classrooms and internet load-shedding.
+
+## The Problem (#rightproblem)
+Teachers in Pakistan rely on rote learning and generic textbooks. They lack the time to build engaging and highly localized lesson plans. Classrooms often combine multiple grades due to resource shortages. Internet connectivity is unstable. Existing AI tools output generic western examples that do not resonate with rural Pakistani students.
+
+## The Target Audience (#audience)
+The primary users are school teachers and principals in Punjab, Pakistan. Secondary users include parents who receive engagement cards via WhatsApp. These users need simple interfaces. They require offline resilience. They need content delivered in clear English and Roman Urdu.
+
+# Core Epics & Features
+Hyper-Local Lesson Generation: The system uses Google Gemini 2.5 Flash to generate 6-part lesson packs. These packs include a teacher guide, student handbook, class activity, quiz, homework, and parent card. The engine injects district-specific analogies like local food, landmarks, and occupations.
+
+## Partitioned Generation Pipeline (#systemsthinking): 
+Large language models fail or truncate when generating massive JSON payloads. The platform breaks the generation into four silos. It creates a shared lesson seed. It then routes that seed to independent guide, student, and assessment generators. This guarantees reliable 8k token outputs without truncation.
+
+## Local Analogy Flywheel (Verified Context): 
+Teachers can upvote effective local analogies. The system saves these to a verified_context Supabase table. Future lessons query this database to reuse high-performing analogies.
+
+## Offline Resilience: 
+The app detects internet drops. It queues generation requests locally when the user is offline. Users can process the queue once connectivity returns.
+
+## Multi-Grade Support: 
+Teachers can adjust sliders to divide a 40-minute activity into Foundation, Core, and Extension tracks. This directly addresses the reality of combined classrooms.
+
 ## Highlights
 
 - PCTB-aligned lesson packs (teacher guide, student handbook, class
