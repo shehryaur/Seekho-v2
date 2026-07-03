@@ -3,18 +3,16 @@
  *
  * POST -> Generate a full classroom lesson pack as strict JSON.
  *
- * v4 update (Partitioned Pipeline):
- *   The single 8-output-field schema-constrained call has been replaced
- *   with a 4-call pipeline: 1 small seed call + 3 parallel silo calls.
- *   See lib/lessonPipeline.ts for the full rationale.
+ * v3 hardening (minimal patch over your ezyZip version):
+ *   - Requires an authenticated Supabase session (401 if not logged in).
+ *   - Rate-limits per user (5/min, 30/hour, 100/day) via Upstash with
+ *     in-memory fallback.
+ *   - Stamps user_id onto saveLesson + logAnalytics so RLS ownership works.
+ *   - Audit-logs the generation event.
  *
- * The returned response shape is unchanged so the LessonGenerator UI
- * and `parseLessonJson` consumers downstream continue to work exactly
- * as before.
- *
- * Variable names, model name, environment variables, and external
- * helpers (`getDistrict`, `getTopVerifiedSnippets`, `saveLesson`,
- * `logAnalytics`, `buildPrompt`, `parseLessonJson`) are all preserved.
+ * The pipeline (generateLessonPipeline) is UNCHANGED — same 4-call pipeline,
+ * same request/response shape, same Zod schema. This is just a thin
+ * auth + quota + ownership shell around your existing working code.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,6 +26,9 @@ import {
   type MultiGradeMix,
 } from "@/lib/supabase";
 import { generateLessonPipeline } from "@/lib/lessonPipeline";
+import { createServerClient } from "@/lib/auth/supabase-server";
+import { rateLimitMulti, QUOTAS } from "@/lib/rate-limit";
+import { audit, getClientIp } from "@/lib/db/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,32 @@ const Body = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // ── 1. Auth: must be logged in ─────────────────────────────────────
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  // ── 2. Rate limit: 5/min, 30/hour, 100/day per user ────────────────
+  const rl = await rateLimitMulti(`generate:${user.id}`, [...QUOTAS.generate]);
+  if (!rl.success) {
+    const retryAfter = Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000));
+    return NextResponse.json(
+      {
+        error: "Generation quota exceeded. Please try again later.",
+        retryAfter,
+      },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } },
+    );
+  }
+
+  // ── 3. Validate body ───────────────────────────────────────────────
   let body: z.infer<typeof Body>;
   try {
     body = Body.parse(await req.json());
@@ -82,6 +109,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── 4. Run the UNCHANGED pipeline ──────────────────────────────────
   try {
     const district = await getDistrict(body.district);
 
@@ -116,7 +144,9 @@ export async function POST(req: NextRequest) {
       JSON.stringify({ ...health, ms: tElapsed }),
     );
 
+    // v3: stamp user_id so RLS lets this user read their own lesson later
     const saved = await saveLesson({
+      user_id: user.id,
       school_name: body.school,
       district: body.district,
       class_num: body.classNum,
@@ -136,6 +166,7 @@ export async function POST(req: NextRequest) {
     });
 
     await logAnalytics({
+      user_id: user.id,
       district: body.district,
       class_num: body.classNum,
       subject: body.subject,
@@ -147,6 +178,23 @@ export async function POST(req: NextRequest) {
       pipeline_guide_ok: health.guide_ok,
       pipeline_student_activity_ok: health.student_activity_ok,
       pipeline_assessment_ok: health.assessment_ok,
+    });
+
+    // v3: audit trail (best-effort, never fails the request)
+    await audit({
+      userId: user.id,
+      action: "lesson.generate",
+      resource: "generated_lessons",
+      resourceId: saved?.share_token ?? undefined,
+      metadata: {
+        district: body.district,
+        class: body.classNum,
+        subject: body.subject,
+        chapter: body.chapter,
+        ms: tElapsed,
+      },
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get("user-agent") ?? undefined,
     });
 
     return NextResponse.json({
