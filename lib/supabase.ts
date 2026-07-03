@@ -1,16 +1,13 @@
 /**
  * lib/supabase.ts — Supabase client + typed helpers for Seekho Engine.
- *
- * Post-pruning notes:
- *   - Community-pool, exam-paper, coverage-report, and substitute-UUID helpers
- *     have been removed. The remaining surface area is the daily planning loop
- *     (lesson generation, lesson lookup by share token, analytics) plus the
- *     NEW verified_context flywheel.
- *
- * Phase 3 additions:
- *   - VerifiedSnippet type
- *   - saveVerifiedSnippet(): thumbs-up insert
- *   - getTopVerifiedSnippets(): top-voted by district, used by buildPrompt
+ * ─────────────────────────────────────────────────────────────────────
+ * v3 hardening patch (additive changes only):
+ *   - GeneratedLesson type gets `user_id?: string`
+ *   - VerifiedSnippet type gets `user_id?: string | null`
+ *   - saveVerifiedSnippet() now REQUIRES `userId` — votes are per-user so
+ *     the same teacher cannot inflate a community vote.
+ *   - Everything else (districts, lesson save, analytics, getTopVerifiedSnippets)
+ *     is byte-identical to your ezyZip version.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -39,7 +36,10 @@ export function supabaseAdmin(): SupabaseClient | null {
     throw new Error("Server-only helper.");
   if (_admin !== undefined) return _admin;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_KEY;
+  // v3: accept either SUPABASE_SERVICE_KEY (old) or SUPABASE_SERVICE_ROLE_KEY (new)
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) {
     _admin = null;
     return null;
@@ -96,6 +96,7 @@ export interface MultiGradeMix {
 
 export interface GeneratedLesson {
   id?: number;
+  user_id?: string;            // ← v3: who owns this lesson
   school_name: string;
   district: string;
   class_num: number;
@@ -124,6 +125,7 @@ export interface GeneratedLesson {
 /** A teacher-verified, thumbs-up snippet for the local analogy flywheel. */
 export interface VerifiedSnippet {
   id?: number;
+  user_id?: string | null;     // ← v3: who voted
   district: string;
   class_num: number | null;
   subject: string | null;
@@ -229,13 +231,13 @@ export async function logAnalytics(
 /* ─── Verified Context (Local Analogy Flywheel) ─────────────────────── */
 
 /**
- * Save a teacher's thumbs-up. If an identical snippet+district already exists,
- * increment its votes; otherwise insert a new row with votes=1.
- *
- * Uses the anon client because the table has a permissive insert/update RLS
- * policy (see migration). For server contexts you may pass the admin client.
+ * v3: Save a teacher's thumbs-up. Each user can vote on a given
+ * (district, snippet) pair ONCE — the unique index
+ * `uniq_verified_context_user_snippet` prevents duplicate votes.
+ * The returned `votes` is the TOTAL community count for that snippet.
  */
 export async function saveVerifiedSnippet(input: {
+  userId: string;              // ← v3: REQUIRED
   district: string;
   classNum?: number | null;
   subject?: string | null;
@@ -247,23 +249,27 @@ export async function saveVerifiedSnippet(input: {
   const trimmed = input.snippet.trim();
   if (!trimmed) return null;
 
+  // Has this user already voted on this exact snippet+district?
   const { data: existing } = await client
     .from("verified_context")
     .select("id, votes")
+    .eq("user_id", input.userId)
     .eq("district", input.district)
     .eq("snippet", trimmed)
     .maybeSingle();
 
   if (existing) {
-    const nextVotes = Number((existing as { votes: number }).votes ?? 0) + 1;
-    await client
+    // Already voted — return the global count without inflating.
+    const { count } = await client
       .from("verified_context")
-      .update({ votes: nextVotes })
-      .eq("id", (existing as { id: number }).id);
-    return { ok: true, votes: nextVotes };
+      .select("id", { count: "exact", head: true })
+      .eq("district", input.district)
+      .eq("snippet", trimmed);
+    return { ok: true, votes: count ?? 1 };
   }
 
   const { error } = await client.from("verified_context").insert({
+    user_id: input.userId,
     district: input.district,
     class_num: input.classNum ?? null,
     subject: input.subject ?? null,
@@ -272,7 +278,14 @@ export async function saveVerifiedSnippet(input: {
     votes: 1,
   });
   if (error) return null;
-  return { ok: true, votes: 1 };
+
+  // Return total community votes for this snippet
+  const { count } = await client
+    .from("verified_context")
+    .select("id", { count: "exact", head: true })
+    .eq("district", input.district)
+    .eq("snippet", trimmed);
+  return { ok: true, votes: count ?? 1 };
 }
 
 /**
