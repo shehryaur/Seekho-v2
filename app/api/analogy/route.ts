@@ -1,20 +1,25 @@
 /**
  * app/api/analogy/route.ts
  *
- * POST → Save a teacher thumbs-up to the `verified_context` table.
+ * POST → Save an AUTHENTICATED teacher thumbs-up to `verified_context`.
  *
- * Body: { district, classNum?, subject?, section, snippet }
- *   - section is one of: teacher | student | activity | quiz | homework | parent
- *   - snippet is the exact text the teacher liked (max ~1200 chars trimmed)
+ * v3 hardening (minimal patch over your ezyZip version):
+ *   - Requires an authenticated Supabase session (401 if not logged in).
+ *   - Rate-limits per user (30/min, 200/hour).
+ *   - Sanitizes snippet before insert.
+ *   - Audit-logs the vote.
+ *   - Delegates to saveVerifiedSnippet(userId, …) — now per-user idempotent.
  *
- * Returns: { ok: true, votes: number }
- *
- * Used by the "Local Analogy Flywheel" feature — see components/LessonGenerator.
+ * Frontend response shape is unchanged: { ok: true, votes: number }.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { saveVerifiedSnippet } from "@/lib/supabase";
+import { createServerClient } from "@/lib/auth/supabase-server";
+import { rateLimitMulti, QUOTAS } from "@/lib/rate-limit";
+import { audit, getClientIp } from "@/lib/db/audit";
+import { sanitizeSnippet } from "@/lib/sanitize";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +33,29 @@ const Body = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // ── 1. Auth ────────────────────────────────────────────────────────
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  // ── 2. Rate limit ──────────────────────────────────────────────────
+  const rl = await rateLimitMulti(`analogy:${user.id}`, [...QUOTAS.analogy]);
+  if (!rl.success) {
+    const retryAfter = Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: "Too many votes. Please slow down.", retryAfter },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } },
+    );
+  }
+
+  // ── 3. Validate ────────────────────────────────────────────────────
   let body: z.infer<typeof Body>;
   try {
     body = Body.parse(await req.json());
@@ -42,23 +70,40 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const cleanSnippet = sanitizeSnippet(body.snippet);
+  if (cleanSnippet.length < 8) {
+    return NextResponse.json(
+      { error: "Snippet too short after sanitization" },
+      { status: 400 },
+    );
+  }
+
+  // ── 4. Write ───────────────────────────────────────────────────────
   const result = await saveVerifiedSnippet({
+    userId: user.id,
     district: body.district,
     classNum: body.classNum ?? null,
     subject: body.subject ?? null,
     section: body.section,
-    snippet: body.snippet,
+    snippet: cleanSnippet,
   });
 
   if (!result) {
     return NextResponse.json(
-      {
-        error:
-          "Could not record your vote (Supabase not configured or write failed).",
-      },
+      { error: "Could not record your vote." },
       { status: 502 },
     );
   }
+
+  // ── 5. Audit ───────────────────────────────────────────────────────
+  await audit({
+    userId: user.id,
+    action: "analogy.vote",
+    resource: "verified_context",
+    metadata: { district: body.district, section: body.section },
+    ipAddress: getClientIp(req),
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  });
 
   return NextResponse.json({ ok: true, votes: result.votes });
 }
