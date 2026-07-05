@@ -3,18 +3,18 @@
 /**
  * app/auth/login/page.tsx
  *
- * Magic-link login page. User enters their email → Supabase sends a
- * sign-in link → clicking it redirects to /auth/callback which sets
+ * Magic-link login page. User enters their email. Supabase sends a
+ * sign-in link. Clicking it redirects to /auth/callback which sets
  * the session cookie and sends them to /dashboard (or the ?next= URL).
  *
  * Also supports Google OAuth if enabled in Supabase.
  */
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@/lib/auth/supabase-browser";
 
-export default function LoginPage() {
+function LoginContent() {
   const supabase = createBrowserClient();
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
@@ -123,5 +123,17 @@ export default function LoginPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="flex min-h-screen items-center justify-center bg-emerald-50 p-6">
+        <div className="text-emerald-900 font-medium">Loading...</div>
+      </main>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
