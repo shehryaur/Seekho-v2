@@ -18,6 +18,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "@/components/UserMenu";
+
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -108,12 +110,13 @@ export function AppShellNav() {
             </nav>
 
             <div className="flex items-center gap-2 sm:justify-end">
-              
               <Link href="/#lesson-generator" className="seekho-btn-primary">
                 <Sparkles className="h-4 w-4" />
                 Generate now
               </Link>
+              <UserMenu />
             </div>
+
           </div>
         </div>
       </header>
