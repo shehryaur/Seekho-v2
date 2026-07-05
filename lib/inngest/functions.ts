@@ -3,9 +3,9 @@
  *
  * Background job definitions for Seekho Engine. Currently defines a single
  * "lesson.generate" job that runs the same pipeline as the sync API but
- * in the background — useful for batch generation or very slow models.
+ * in the background. Useful for batch generation or very slow models.
  *
- * If you're not using Inngest yet, this file is safe to have — it won't
+ * If you're not using Inngest yet, this file is safe to have. It won't
  * execute unless you send the "seekho/lesson.generate" event.
  */
 
@@ -40,8 +40,11 @@ type GenerateInput = {
 };
 
 export const generateLessonJob = inngest.createFunction(
-  { id: "generate-lesson", name: "Generate Lesson (background)" },
-  { event: "seekho/lesson.generate" },
+  {
+    id: "generate-lesson",
+    name: "Generate Lesson (background)",
+    triggers: [{ event: "seekho/lesson.generate" }]
+  },
   async ({ event, step }) => {
     const input = event.data as GenerateInput;
 
@@ -111,7 +114,7 @@ export const generateLessonJob = inngest.createFunction(
       });
     });
 
-    logger.info({ userId: input.userId, shareToken: saved?.share_token }, "background lesson generated");
+    logger.info("background lesson generated", { userId: input.userId, shareToken: saved?.share_token ?? null });
 
     return { shareToken: saved?.share_token, health };
   },
