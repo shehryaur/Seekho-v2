@@ -17,7 +17,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/profile"];
+
 const PROTECTED_API_PREFIXES = ["/api/generate", "/api/analogy"];
 const PUBLIC_PATHS = [
   "/",
