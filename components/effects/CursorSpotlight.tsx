@@ -25,9 +25,9 @@ export function CursorSpotlight() {
             className="pointer-events-none fixed inset-0 z-30 transition-opacity duration-300"
             style={{
                 background: `radial-gradient(640px circle at ${pos.x}px ${pos.y}px,
-          rgba(22, 163, 74, 0.10),
-          rgba(132, 204, 22, 0.08) 28%,
-          rgba(34, 197, 94, 0.05) 45%,
+          rgba(22, 220, 95, 0.22),
+          rgba(20, 28, 173, 0.13) 28%,
+          rgba(4, 245, 92, 0.05) 45%,
           transparent 65%)`,
             }}
         />
